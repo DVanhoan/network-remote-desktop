@@ -88,8 +88,6 @@
     </div>
 
     <script>
-
-
         function updateScreen(imageString) {
             $("#screen").attr("src", `data:image/png;base64,${imageString}`);
         }
@@ -103,10 +101,6 @@
                 var x = (event.clientX - bounds.left) / this.clientWidth;
                 var y = (event.clientY - bounds.top) / this.clientHeight;
 
-
-                x *= serverWidth;
-                y *= serverHeight;
-
                 eel.transmit_input({ pos: [x, y], button: event.button }, "mousedown");
             });
 
@@ -119,12 +113,10 @@
 
             $("#screen").on("keydown", function (event) {
                 eel.transmit_input(event.keyCode, "keydown");
-                event.preventDefault();
                 console.log(event);
             })
             $("#screen").on("keyup", function (event) {
                 eel.transmit_input(event.keyCode, "keyup");
-                event.preventDefault();
                 console.log(event);
             })
 
@@ -135,13 +127,6 @@
                 //console.log([x,y]);
                 eel.transmit_input([x, y], "mousemove");
             })
-
-            $("#screen").on("wheel", function (event) {
-                eel.transmit_input(
-                    { deltaX: event.originalEvent.deltaX, deltaY: event.originalEvent.deltaY },
-                    "wheel"
-                );
-            });
 
 
             eel.expose(updateScreen);

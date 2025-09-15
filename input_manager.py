@@ -176,7 +176,7 @@ class InputManager:
         except Exception as e:
             logger.error(f"Lỗi connect_input: {e}")
 
-    def transmit_input(self, mouse_pos=None, mouse_down=None, mouse_up=None, keydown=None, keyup=None, wheel=None):
+    def transmit_input(self, mouse_pos=None, mouse_down=None, mouse_up=None, keydown=None, keyup=None):
         try:
             key_input = {
                 "mouse_pos": mouse_pos,
@@ -184,7 +184,6 @@ class InputManager:
                 "mouse_up": mouse_up,
                 "keydown": keydown,
                 "keyup": keyup,
-                "wheel": wheel
             }
             self.send_msg(self.conn, str(key_input).encode())
             logger.debug(f"Đã gửi input: {key_input}")
@@ -231,11 +230,6 @@ class InputManager:
                         if received_input['mouse_up'] == 0:
                             mouse_controller.release(mouse.Button.left)
 
-                        if received_input['mouse_down'] == 1:
-                            mouse_controller.press(mouse.Button.middle)
-                        if received_input['mouse_up'] == 1:
-                            mouse_controller.release(mouse.Button.middle)
-
                         if received_input['mouse_down'] == 2:
                             mouse_controller.press(mouse.Button.right)
                         if received_input['mouse_up'] == 2:
@@ -245,10 +239,6 @@ class InputManager:
                             keyboard_controller.press(keyboard.KeyCode(received_input['keydown']))
                         if received_input['keyup']:
                             keyboard_controller.release(keyboard.KeyCode(received_input['keyup']))
-                        if 'wheel' in received_input:
-                            dx = received_input['wheel'].get('deltaX', 0)
-                            dy = received_input['wheel'].get('deltaY', 0)
-                            mouse_controller.scroll(dx, dy)
 
                     except Exception as e:
                         logger.error(f"Lỗi vòng lặp receive_input: {e}")

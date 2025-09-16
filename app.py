@@ -17,8 +17,6 @@ logging.basicConfig(
     ]
 )
 
-
-
 status = 'None'
 connection = 'None'
 vnc = VNC()

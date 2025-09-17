@@ -15,6 +15,8 @@ class VNC:
         self.ip = ip
         self.port = port
         self.conn = None
+        self.password = ''
+        self.requestPassword = ''
 
     # ---------------- Screenshot helpers ----------------
 
@@ -114,10 +116,13 @@ class VNC:
                         logger.error(f"Lỗi vòng lặp transmit: {e}")
                         break
 
-    def start_receive(self):
+    def start_receive(self, password):
         """Client khởi động kết nối tới server"""
         try:
             self.conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            if password != self.password:
+                raise Exception
+            self.requestPassword = password
             self.conn.connect((self.ip, self.port))
             logger.info(f"VNC client đã kết nối tới server {self.ip}:{self.port}")
         except Exception as e:

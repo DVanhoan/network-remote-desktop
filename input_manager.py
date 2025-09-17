@@ -153,6 +153,9 @@ class InputManager:
                         if received_input['rmb']:
                             mouse_var.click(mouse.Button.right)
                             logger.debug("Click RMB")
+                        if received_input['wheel']:
+                            mouse_var.scroll(dx=0, dy=120)
+                            logger.debug("Mouse scroll")
 
                         # Keyboard
                         for k in received_input['keys']:
@@ -221,6 +224,7 @@ class InputManager:
                         logger.debug(f"Nhận input: {received_input}")
 
                         mouse_input = received_input['mouse_pos']
+                        wheel_input = received_input['wheel']
                         if mouse_input:
                             mouse_input[0] *= width
                             mouse_input[1] *= height
@@ -241,14 +245,13 @@ class InputManager:
                         if received_input['mouse_up'] == 2:
                             mouse_controller.release(mouse.Button.right)
 
+                        if received_input['wheel']:
+                            mouse_controller.scroll(dx=0, dy=-180/wheel_input)
+
                         if received_input['keydown']:
                             keyboard_controller.press(keyboard.KeyCode(received_input['keydown']))
                         if received_input['keyup']:
                             keyboard_controller.release(keyboard.KeyCode(received_input['keyup']))
-                        if 'wheel' in received_input:
-                            dx = received_input['wheel'].get('deltaX', 0)
-                            dy = received_input['wheel'].get('deltaY', 0)
-                            mouse_controller.scroll(dx, dy)
 
                     except Exception as e:
                         logger.error(f"Lỗi vòng lặp receive_input: {e}")

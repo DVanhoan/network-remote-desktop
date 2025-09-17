@@ -37,7 +37,6 @@ class VNC:
     def image_serializer(self, resolution=(1800, 900)):
         try:
             image = self.screenshot()
-            print(image)
             if image is None:
                 return None
             image = image.resize(resolution, Image.Resampling.LANCZOS)

@@ -80,6 +80,8 @@ def transmit_input(data, event_type):
                 input_manager.transmit_input(mouse_pos=data['pos'], mouse_down=data['button'])
             elif event_type == 'mouseup':
                 input_manager.transmit_input(mouse_pos=data['pos'], mouse_up=data['button'])
+            elif event_type == 'mousescroll':
+                input_manager.transmit_input(mouse_scroll=data['deltaY'])
         logging.debug(f"Đã gửi input: {event_type} - {data}")
     except Exception as e:
         logging.error(f"Lỗi khi transmit input: {e}")

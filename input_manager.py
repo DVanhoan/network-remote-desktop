@@ -176,7 +176,7 @@ class InputManager:
         except Exception as e:
             logger.error(f"Lỗi connect_input: {e}")
 
-    def transmit_input(self, mouse_pos=None, mouse_down=None, mouse_up=None, keydown=None, keyup=None):
+    def transmit_input(self, mouse_pos=None, mouse_down=None, mouse_up=None, keydown=None, keyup=None, mouse_scroll=None):
         try:
             key_input = {
                 "mouse_pos": mouse_pos,
@@ -184,6 +184,7 @@ class InputManager:
                 "mouse_up": mouse_up,
                 "keydown": keydown,
                 "keyup": keyup,
+                "mouse_scroll": mouse_scroll,
             }
             self.send_msg(self.conn, str(key_input).encode())
             logger.debug(f"Đã gửi input: {key_input}")
@@ -239,6 +240,11 @@ class InputManager:
                             keyboard_controller.press(keyboard.KeyCode(received_input['keydown']))
                         if received_input['keyup']:
                             keyboard_controller.release(keyboard.KeyCode(received_input['keyup']))
+                        if received_input.get('mouse_scroll') is not None:
+                            # Scroll vertically, deltaY > 0 is down, < 0 is up
+                            mouse_controller.scroll(0, int(received_input['mouse_scroll'] / 100))
+                            logger.debug(f"Scroll mouse: {received_input['mouse_scroll']}")
+
 
                     except Exception as e:
                         logger.error(f"Lỗi vòng lặp receive_input: {e}")

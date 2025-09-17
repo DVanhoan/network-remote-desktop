@@ -43,7 +43,6 @@ class VNC:
             buffer = BytesIO()
             image.save(buffer, format='jpeg')
             data_string = base64.b64encode(buffer.getvalue())
-            logger.debug(f"Đã serialize ảnh ({len(data_string)} bytes)")
             return data_string
         except Exception as e:
             logger.error(f"Lỗi serialize ảnh: {e}")

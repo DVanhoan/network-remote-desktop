@@ -242,7 +242,7 @@ class InputManager:
                             keyboard_controller.release(keyboard.KeyCode(received_input['keyup']))
                         if received_input.get('mouse_scroll') is not None:
                             # Scroll vertically, deltaY > 0 is down, < 0 is up
-                            mouse_controller.scroll(0, int(received_input['mouse_scroll'] / 100))
+                            mouse_controller.scroll(0, int(-received_input['mouse_scroll'] / 100))
                             logger.debug(f"Scroll mouse: {received_input['mouse_scroll']}")
 
 

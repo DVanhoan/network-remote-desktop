@@ -94,22 +94,11 @@
     <div id="app">
         <header class="toolbar">
             <div class="left">
-                <div class="my-information">
-                </div>
-                <button class="btn btn-primary" onclick="eel.host()">Host VNC</button>
-            </div>
-            <div class="right">
                 <div style="display: flex; align-items: flex-end; flex-direction: column; flex-grow: 1; width: 100%;">
                     <div style="flex-grow: 1; width: 100%;">
-                        IP: <input id="ip" value="127.0.0.1" class="form-control ip-input w-100" required>
+                        IP: <input id="ip" value="127.0.0.1" class="form-control ip-input" required readonly>
+                        <button class="btn btn-danger" onclick="stop_connect()">Stop</button>
                     </div>
-                    <div style="flex-grow: 1; width: 100%; margin-top: 8px;">
-                        Password: <input id="password" placeholder="Password" class="form-control ip-input w-100" required>
-                    </div>
-                </div>
-                <div style="display: flex; flex-direction: row; gap: 12px; justify-content: center; margin-top: 12px;">
-                    <button class="btn btn-primary" onclick="connect()">Connect</button>
-                    <button class="btn btn-danger" onclick="eel.stop_host()">Stop</button>
                 </div>
             </div>
         </header>
@@ -120,6 +109,15 @@
     </div>
 
     <script>
+        async function stop_connect() {
+            await eel.stop_connect()
+            window.close()
+        }
+
+        function closeWindow() {
+            window.close()
+        }
+        eel.expose(closeWindow)
 
         async function connect() {
             ip = $('#ip').val();
@@ -137,10 +135,14 @@
         }
 
         $(document).ready(async function() {
-            let ip = await eel.get_ip()();
-            $(".my-information").append(`<div>Your IP address: ${ip}</div>`)
-            let password = await eel.get_password()();
-            $(".my-information").append(`<div>Your password: ${password}</div>`)
+            const urlParams = new URLSearchParams(window.location.search);
+            const hostIpFromUrl = urlParams.get('host');
+            if (hostIpFromUrl) {
+                $("#ip").val(hostIpFromUrl);
+            } else {
+                let fallbackIp = await eel.get_host_ip()();
+                $("#ip").val(fallbackIp || "127.0.0.1");
+            }
         })
 
         function updateScreen(imageString)
@@ -149,6 +151,11 @@
         }
 
         $(document).ready(function() {
+            try {
+                window.resizeTo(1200, 800);
+            } catch (e) {
+                console.warn("Không thể thay đổi kích thước cửa sổ:", e);
+            }
 
             $("#screen")[0].oncontextmenu = function() {return false;} 
 

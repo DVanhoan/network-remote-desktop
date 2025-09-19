@@ -1,13 +1,15 @@
 import eel
 import logging
 from vnc import VNC
-from threading import Thread
+from threading import Thread, Event
 import sys
 
 from input_manager import InputManager
 from vnc import VNC
 import random
-import netifaces
+import string
+import psutil
+import socket
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -22,28 +24,27 @@ status = 'None'
 connection = 'None'
 vnc = VNC()
 input_manager = InputManager()
+stop_thread = Event()
+host_ip = ''
 
 eel.init('web')
 
 @eel.expose
 def get_ip():
-    ip = "127.0.0.1"
-    try:
-        gws = netifaces.gateways()
-        default_gateway = gws.get('default', {}).get(netifaces.AF_INET)
-        if default_gateway:
-            gateway_ip, interface = default_gateway
-            addresses = netifaces.ifaddresses(interface)
-            ip_info = addresses.get(netifaces.AF_INET)
-            if ip_info:
-                ip = ip_info[0]['addr']
-    except Exception:
-        pass
+    ip = '127.0.0.1'
+    for interface, addrs in psutil.net_if_addrs().items():
+        for addr in addrs:
+            if addr.family == socket.AF_INET and not addr.address.startswith("127.0.0.1") and not addr.address.startswith("169.254"):
+                return addr.address
     return ip
 
 @eel.expose
 def get_password():
-    vnc.password = random.randbytes(8).hex()
+    if vnc.password != '':
+        return vnc.password
+    characters = string.ascii_letters + string.digits
+    vnc.password = ''.join(random.choice(characters) for i in range(32))
+    vnc.nonce = ''.join(random.choice(characters) for i in range(12))
     return vnc.password
 
 @eel.expose
@@ -51,54 +52,74 @@ def host():
     global status
     global vnc
     global transmit_thread
+    global input_thread
     global input_manager
+    global stop_thread
 
     if status == 'None':
         logging.info("Bắt đầu host...")
         status = 'host'
-
-        transmit_thread = Thread(target=vnc.transmit)
+        stop_thread.clear()
+        transmit_thread = Thread(target=vnc.transmit_loop, args=[stop_thread])
         transmit_thread.daemon = True
         transmit_thread.start()
 
-        input_thread = Thread(target=input_manager.receive_input, args=[])
+        input_thread = Thread(target=input_manager.receive_input, args=[stop_thread])
         input_thread.daemon = True
         input_thread.start()
         logging.debug("Host threads đã khởi chạy")
     elif status == 'host':
-        logging.debug("Đang tắt kết nối...")
         status = 'None'
+        logging.debug("Đang dừng host threads...")
+        stop_thread.set()
+        print("Gửi sự kiện dừng: " + str(stop_thread.is_set()))
+        if input_thread and input_thread.is_alive():
+            input_thread.join(timeout=0.3)
+        if transmit_thread and transmit_thread.is_alive():
+            transmit_thread.join(timeout=0.3)
 
-        if vnc.conn:
-            vnc.conn.close()
-            vnc.conn = None
+        input_thread = None
+        transmit_thread = None
+        logging.debug("Host threads đã dừng")
 
 @eel.expose
-def stop_host():
+def stop_connect():
     global status
+    global vnc
     status = 'None'
-    logging.info("Đã dừng server host.")
+    try:
+        vnc.stop_receive()
+    except Exception as e:
+        logging.error(f"Lỗi khi dừng kết nối VNC: {e}")
+
+    try:
+        input_manager.disconnect_input()
+    except Exception as e:
+        logging.error(f"Lỗi khi dừng kết nối input: {e}")
+    logging.info("Đã dừng kết nối đến host.")
 
 @eel.expose
 def connect(ip, requestPassword):
     global status
     global vnc
     global connection
+    global host_ip
     logging.info(f"Đang kết nối tới {ip}...")
     status = 'client'
     vnc.ip = ip
     input_manager.ip = ip
     try:
-        vnc.start_receive(requestPassword)
+        result = vnc.start_receive(requestPassword)
+        if not result:
+            raise Exception
         input_manager.connect_input()
         connection = 'active'
+        eel.show(f"connect.html?host={ip}")
+        host_ip = ip
         logging.info(f"Đã kết nối thành công tới {ip}")
-        eel.start("connect.html", block=False, port=8080)
-        print(True)
         return True
     except Exception as e:
         logging.error(f"Lỗi khi kết nối tới {ip}: {e}")
-        print(False)
         return False
 
 @eel.expose
@@ -129,7 +150,11 @@ while True:
         if status == 'host':
             eel.updateScreen(vnc.image_serializer().decode())
         elif status == 'client' and connection == 'active':
-            eel.updateScreen(vnc.receive())
-        eel.sleep(.01)
+            screen = vnc.receive()
+            if screen is not None:
+                eel.updateScreen(screen)
+            else:
+                eel.closeWindow()
+        eel.sleep(.02)
     except Exception as e:
         logging.error(f"Lỗi vòng lặp chính: {e}")

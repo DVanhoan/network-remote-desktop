@@ -4,6 +4,7 @@ import pyautogui
 import struct
 import logging
 from pynput import mouse, keyboard
+import chacha20_util
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +18,10 @@ class InputManager:
             "keys": [],
         }
         self.ip = ip
+        self.key = None
+        self.nonce = None
+        self.requestKey = None
+        self.requestNonce = None
         self.port = port
         self.conn = None
         self.width, self.height = (0, 0)
@@ -25,8 +30,9 @@ class InputManager:
 
     def send_msg(self, sock, msg):
         try:
-            msg = struct.pack('>I', len(msg)) + msg
-            sock.sendall(msg)
+            encrypt = chacha20_util.encrypt(self.requestKey, self.requestNonce, msg)
+            data = struct.pack('>I', len(encrypt)) + encrypt
+            sock.sendall(data)
             logger.debug(f"Đã gửi message {len(msg)} bytes")
         except Exception as e:
             logger.error(f"Lỗi khi gửi message: {e}")
@@ -37,7 +43,9 @@ class InputManager:
             if not raw_msglen:
                 return None
             msglen = struct.unpack('>I', raw_msglen)[0]
-            return self.recvall(sock, msglen)
+            encrypted_data = self.recvall(sock, msglen)
+            decrypt = chacha20_util.decrypt(self.key, self.nonce, encrypted_data)
+            return decrypt
         except Exception as e:
             logger.error(f"Lỗi khi nhận message: {e}")
             return None

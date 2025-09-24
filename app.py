@@ -25,7 +25,6 @@ connection = 'None'
 vnc = VNC()
 input_manager = InputManager()
 stop_thread = Event()
-host_ip = ''
 
 eel.init('web')
 
@@ -44,7 +43,10 @@ def get_password():
         return vnc.password
     characters = string.ascii_letters + string.digits
     vnc.password = ''.join(random.choice(characters) for i in range(32))
-    vnc.nonce = ''.join(random.choice(characters) for i in range(12))
+    input_manager.key = vnc.password
+    vnc.nonce = ''.join(random.choice(characters) for i in range(16))
+    input_manager.nonce = vnc.nonce
+    logging.debug(f"Send key={vnc.password} nonce={vnc.nonce}")
     return vnc.password
 
 @eel.expose
@@ -103,7 +105,6 @@ def connect(ip, requestPassword):
     global status
     global vnc
     global connection
-    global host_ip
     logging.info(f"Đang kết nối tới {ip}...")
     status = 'client'
     vnc.ip = ip
@@ -112,10 +113,11 @@ def connect(ip, requestPassword):
         result = vnc.start_receive(requestPassword)
         if not result:
             raise Exception
+        input_manager.requestKey = vnc.requestPassword
+        input_manager.requestNonce = vnc.requestNonce
         input_manager.connect_input()
         connection = 'active'
         eel.show(f"connect.html?host={ip}")
-        host_ip = ip
         logging.info(f"Đã kết nối thành công tới {ip}")
         return True
     except Exception as e:
@@ -155,6 +157,6 @@ while True:
                 eel.updateScreen(screen)
             else:
                 eel.closeWindow()
-        eel.sleep(.02)
+        eel.sleep(.015)
     except Exception as e:
         logging.error(f"Lỗi vòng lặp chính: {e}")

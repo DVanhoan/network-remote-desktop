@@ -6,6 +6,7 @@ import base64
 import struct
 import time
 import logging
+import chacha20_util
 
 logger = logging.getLogger(__name__)
 
@@ -64,8 +65,9 @@ class VNC:
 
     def send_msg(self, sock, msg):
         try:
-            msg = struct.pack('>I', len(msg)) + msg
-            sock.sendall(msg)
+            encrypt = chacha20_util.encrypt(self.password, self.nonce, msg)
+            data = struct.pack('>I', len(encrypt)) + encrypt
+            sock.sendall(data)
             logger.debug(f"Đã gửi message ({len(msg)} bytes)")
         except (BrokenPipeError, ConnectionResetError) as e:
             logger.warning(f"Client ngắt kết nối: {e}")
@@ -89,7 +91,9 @@ class VNC:
             if not raw_msglen:
                 return None
             msglen = struct.unpack('>I', raw_msglen)[0]
-            return self.recvall(sock, msglen)
+            encrypted_data = self.recvall(sock, msglen)
+            decrypt = chacha20_util.decrypt(self.requestPassword, self.requestNonce, encrypted_data)
+            return decrypt
         except Exception as e:
             logger.error(f"Lỗi recv_msg: {e}")
             return None
@@ -157,8 +161,8 @@ class VNC:
                             pass
                         return
                     else:
-                        self.nonce = self.nonce.encode('utf-8')
-                        conn.sendall(b"AUTH_SUCCESS " + self.nonce)
+                        nonce_bytes = self.nonce.encode('utf-8')
+                        conn.sendall(b"AUTH_SUCCESS " + nonce_bytes)
                 except Exception as e:
                     logger.warning(f"Lỗi mật khẩu: {e}")
                     return
@@ -195,8 +199,10 @@ class VNC:
             self.conn.sendall(raw_password)
             result = self.conn.recv(1024)
             if b"AUTH_SUCCESS" in result:
-                self.requestNonce = result.split(b' ')[1]
+                self.requestPassword = password
+                self.requestNonce = result.split(b' ')[1].decode('utf-8')
                 logger.info(f"VNC client đã kết nối tới host {self.ip}:{self.port}")
+                logger.debug(f"Receive password={self.requestPassword} nonce={self.requestNonce}")
                 return True
             else:
                 logger.error("Xác thực thất bại — mật khẩu sai")

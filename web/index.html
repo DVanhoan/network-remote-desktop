@@ -125,43 +125,7 @@
                 $(this).toggleClass("btn-primary");
                 $(this).toggleClass("btn-danger");
             })
-
-            $("#screen")[0].oncontextmenu = function() {return false;} 
-
-            $("#screen").on('mousedown', function(event){ 
-                bounds = this.getBoundingClientRect();
-                var x = (event.clientX - bounds.left) / this.clientWidth;
-                var y = (event.clientY - bounds.top) / this.clientHeight;
-                eel.transmit_input({pos: [x,y], button: event.button}, "mousedown");
-            }); 
-
-            $("#screen").on('mouseup', function(event){ 
-                bounds = this.getBoundingClientRect();
-                var x = (event.clientX - bounds.left) / this.clientWidth;
-                var y = (event.clientY - bounds.top) / this.clientHeight;
-                eel.transmit_input({pos: [x,y], button: event.button}, "mouseup");
-            }); 
             
-            $("#screen").on("keydown", function(event){
-                eel.transmit_input(event.keyCode, "keydown");
-                console.log(event);
-            })
-            $("#screen").on("keyup", function(event){
-                eel.transmit_input(event.keyCode, "keyup");
-                console.log(event);
-            })
-
-            $("#screen").on("mousemove", function(event){
-                bounds = this.getBoundingClientRect();
-                var x = (event.clientX - bounds.left) / this.clientWidth;
-                var y = (event.clientY - bounds.top) / this.clientHeight;
-                document.body.style.cursor = "url('data:image/svg+xml;utf8,\
-                    <svg xmlns=\"http://www.w3.org/2000/svg\" width=\"32\" height=\"32\" viewBox=\"0 0 32 32\">\
-                    <polygon points=\"4,4 12,16 8,16 12,28 16,28 12,16 20,16\" fill=\"blue\"/>\
-                    </svg>') 4 4, auto";
-                eel.transmit_input([x, y], "mousemove"); 
-            })
-
             $(".screen-container").on("wheel", function(event) {
                 event.preventDefault();
                 eel.transmit_input({deltaY: event.originalEvent.deltaY}, "wheel");

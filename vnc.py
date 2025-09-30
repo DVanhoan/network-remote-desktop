@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 class VNC:
 
-    def __init__(self, ip='0.0.0.0', port=7000):
+    def __init__(self, ip='0.0.0.0', port=7000, open_chat_window=None, disconnect_chat=None):
         self.ip = ip
         self.port = port
         self.conn = None
@@ -20,6 +20,8 @@ class VNC:
         self.nonce = ''
         self.requestPassword = ''
         self.requestNonce = ''
+        self.open_chat_window = open_chat_window
+        self.disconnect_chat = disconnect_chat
 
     # ---------------- Screenshot helpers ----------------
 
@@ -111,18 +113,18 @@ class VNC:
 
     def transmit(self, stop_event):
         """Server gửi màn hình liên tục cho client"""
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sender:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
             try:
-                sender.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                sender.bind((self.ip, self.port))
-                sender.listen()
-                sender.settimeout(0.5)
+                listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                listener.bind((self.ip, self.port))
+                listener.listen()
+                listener.settimeout(0.5)
                 logger.info(f"VNC server đang chạy tại {self.ip}:{self.port}, chờ client...")
                 conn = None
                 addr = None
                 while not stop_event.is_set():
                     try:
-                        conn, addr = sender.accept()
+                        conn, addr = listener.accept()
                         break 
                     except socket.timeout:
                         continue
@@ -168,6 +170,11 @@ class VNC:
                     return
 
                 logger.info(f"VNC client đã kết nối: {addr}")
+
+                # Mở cửa sổ chat
+                if self.open_chat_window:
+                    self.open_chat_window(addr[0])
+
                 while not stop_event.is_set():
                     try:
                         frame = self.image_serializer()
@@ -177,6 +184,8 @@ class VNC:
                         logger.debug("Đã gửi frame VNC")
                     except Exception as e:
                         logger.error(f"Lỗi vòng lặp transmit: {e}")
+                        if self.disconnect_chat:
+                            self.disconnect_chat()
                         break
 
     def transmit_loop(self, stop_event):

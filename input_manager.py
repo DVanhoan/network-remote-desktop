@@ -219,12 +219,12 @@ class InputManager:
             logger.error(f"Lỗi transmit_input: {e}")
 
     def receive_input(self, stop_event):
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sender:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
             try:
-                sender.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                sender.bind((self.ip, self.port))
-                sender.listen()
-                sender.settimeout(0.5)
+                listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                listener.bind((self.ip, self.port))
+                listener.listen()
+                listener.settimeout(0.5)
                 logger.info(f"Đang chờ input client tại {self.ip}:{self.port}...")
             except Exception as e:
                 logger.error(f"Lỗi khi bind/listen receive_input: {e}")
@@ -235,7 +235,7 @@ class InputManager:
                 try:
                     while not stop_event.is_set():
                         try:
-                            conn, addr = sender.accept()
+                            conn, addr = listener.accept()
                             break
                         except socket.timeout:
                             continue

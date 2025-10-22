@@ -50,7 +50,6 @@ class VNC:
             buffer = BytesIO()
             image.save(buffer, format='jpeg')
             data_string = base64.b64encode(buffer.getvalue())
-            logger.debug(f"Đã serialize ảnh ({len(data_string)} bytes)")
             return data_string
         except Exception as e:
             logger.error(f"Lỗi serialize ảnh: {e}")
@@ -181,7 +180,7 @@ class VNC:
                         if frame is None:
                             continue
                         self.send_msg(conn, frame)
-                        logger.debug("Đã gửi frame VNC")
+                        # logger.debug("Đã gửi frame VNC")
                     except Exception as e:
                         logger.error(f"Lỗi vòng lặp transmit: {e}")
                         if self.disconnect_chat:

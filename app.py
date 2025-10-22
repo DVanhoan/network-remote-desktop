@@ -9,7 +9,9 @@ import random
 import string
 import psutil
 import socket
+
 from chat import Chat
+from video_manager import VideoManager
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -20,12 +22,18 @@ logging.basicConfig(
     ]
 )
 
+
 status = 'None'
 connection = 'None'
 vnc = VNC()
 input_manager = InputManager()
 stop_thread = Event()
 chat_manager = Chat()
+
+# Video call
+video_manager = VideoManager()
+video_thread = None
+video_stop_event = Event()
 
 vnc.disconnect_chat = chat_manager.disconnect_chat
 
@@ -54,6 +62,8 @@ def open_chat_window(ip):
 def get_ip():
     ip = '127.0.0.1'
     for interface, addrs in psutil.net_if_addrs().items():
+        if "VMware" in interface or "VirtualBox" in interface or "Loopback" in interface:
+            continue
         for addr in addrs:
             if addr.family == socket.AF_INET and not addr.address.startswith("127.0.0.1") and not addr.address.startswith("169.254"):
                 vnc.myIp = addr.address
@@ -85,6 +95,10 @@ def host():
     global chat_manager
     global chat_thread
 
+    global video_manager
+    global video_thread
+    global video_stop_event
+
     if status == 'None':
         logging.info("Bắt đầu host...")
         status = 'host'
@@ -107,6 +121,15 @@ def host():
 
         stop_thread.clear()
 
+        # Start video call thread (host)
+        video_manager.key = vnc.password
+        video_manager.nonce = vnc.nonce
+        video_manager.ip = '0.0.0.0'
+        video_manager.port = 9000
+        video_stop_event.clear()
+        video_thread = Thread(target=video_manager.send_video, args=(video_stop_event,))
+        video_thread.daemon = True
+        video_thread.start()
         logging.debug("Host threads đã khởi chạy")
     elif status == 'host':
         status = 'None'
@@ -126,6 +149,12 @@ def host():
         chat_thread = None
         chat_manager.disconnect_chat()
         logging.debug("Host threads đã dừng")
+
+        # Stop video call thread (host)
+        if video_thread and video_thread.is_alive():
+            video_stop_event.set()
+            video_thread.join(timeout=0.3)
+        video_thread = None
 
 @eel.expose
 def stop_connect():
@@ -157,6 +186,10 @@ def connect(ip, requestPassword):
     global vnc
     global connection
     global chat_manager
+
+    global video_manager
+    global video_thread
+    global video_stop_event
     logging.info(f"Đang kết nối tới {ip}...")
     status = 'client'
     vnc.ip = ip
@@ -184,10 +217,34 @@ def connect(ip, requestPassword):
         connection = 'active'
         eel.show(f"connect.html?host={ip}")
         logging.info(f"Đã kết nối thành công tới {ip}")
+
+        # Start video receive thread (client)
+        video_manager.key = vnc.requestPassword
+        video_manager.nonce = vnc.requestNonce
+        video_manager.ip = ip
+        video_manager.port = 9000
+        video_stop_event.clear()
+        def on_frame_callback(b64):
+            eel.updateVideoFrame(b64)
+        video_thread = Thread(target=video_manager.receive_video, args=(video_stop_event, on_frame_callback))
+        video_thread.daemon = True
+        video_thread.start()
         return True
     except Exception as e:
         logging.error(f"Lỗi khi kết nối tới {ip}: {e}")
         return False
+
+@eel.expose
+def start_video_call():
+    # Có thể mở rộng để bật video call từ web
+    pass
+
+@eel.expose
+def stop_video_call():
+    global video_stop_event
+    video_stop_event.set()
+    # Có thể mở rộng để tắt video call từ web
+    pass
 
 @eel.expose
 def transmit_input(data, event_type):
@@ -217,7 +274,7 @@ def send_chat_message(msg):
         logging.error(f"Lỗi khi gửi tin nhắn chat: {e}")
         return False
 
-eel.start('index.html', block=False, port=8080, size=(595, 200))
+eel.start('index.html', block=False, port=8080, size=(595, 250))
 logging.info("Ứng dụng Eel đã khởi động trên port 8080")
 
 while True:

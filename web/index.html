@@ -19,13 +19,14 @@
     <script src="/eel.js"></script>
 
     <style>
-        html, body {
+        html,
+        body {
             margin: 0;
             padding: 0;
-            display: inline-block;   /* hoặc block nhưng không chiếm hết */
-            width: fit-content;      /* ôm đúng nội dung */
-            height: fit-content;     /* ôm đúng chiều cao toolbar */
-            background: transparent; /* không còn nền đen thừa */
+            display: inline-block;
+            width: fit-content;
+            height: fit-content;
+            background: transparent;
         }
 
         .toolbar {
@@ -43,7 +44,7 @@
             width: 150px;
             margin: 0 8px;
         }
-        
+
         .my-information {
             margin-right: 8px;
         }
@@ -55,6 +56,7 @@
             align-items: center;
             flex: 1;
         }
+
         .right {
             display: flex;
             flex-direction: column;
@@ -95,9 +97,9 @@
         async function connect() {
             ip = $('#ip').val();
             password = $('#password').val()
-            if (ip.length == 0){
+            if (ip.length == 0) {
                 $('#ip').focus()
-            } else if (password.length == 0){
+            } else if (password.length == 0) {
                 $('#password').focus()
             } else {
                 result = await eel.connect(ip, password)
@@ -107,28 +109,27 @@
             }
         }
 
-        $(document).ready(async function() {
+        $(document).ready(async function () {
             let ip = await eel.get_ip()();
             $(".my-information").append(`<div>Your IP address: ${ip}</div>`)
             let password = await eel.get_password()();
             $(".my-information").append(`<div>Your password: ${password}</div>`)
         })
 
-        function updateScreen(imageString)
-        {
+        function updateScreen(imageString) {
             $("#screen").attr("src", `data:image/png;base64,${imageString}`);
         }
 
-        $(document).ready(function() {
+        $(document).ready(function () {
 
-            $("#host-btn").on('click', function(event) {
+            $("#host-btn").on('click', function (event) {
                 $(this).toggleClass("btn-primary");
                 $(this).toggleClass("btn-danger");
             })
-            
-            $(".screen-container").on("wheel", function(event) {
+
+            $(".screen-container").on("wheel", function (event) {
                 event.preventDefault();
-                eel.transmit_input({deltaY: event.originalEvent.deltaY}, "wheel");
+                eel.transmit_input({ deltaY: event.originalEvent.deltaY }, "wheel");
             })
 
             eel.expose(updateScreen);

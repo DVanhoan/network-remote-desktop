@@ -59,54 +59,6 @@ class InputManager:
             data += packet
         return data
 
-    # ---------------- Event handling ----------------
-
-    def set_resolution(self, width=1280, height=720):
-        self.width = width
-        self.height = height
-        logger.info(f"Set resolution: {self.width}x{self.height}")
-
-    def motion(self, event):
-        self.input["mouse_pos"] = [event.x/self.width, event.y/self.height]
-        self.send_msg(self.conn, str(self.input).encode())
-
-    def key_pressed(self, event):
-        try:
-            logger.debug(f"Key Press: {repr(event.char)}")
-            self.input["keys"].append(repr(event.char))
-            self.input["keys"] = list(set(self.input["keys"]))
-            self.send_msg(self.conn, str(self.input).encode())
-        except Exception as e:
-            logger.error(f"Lỗi key_pressed: {e}")
-    
-    def key_released(self, event):
-        try:
-            logger.debug(f"Key Released: {repr(event.char)}")
-            if repr(event.char) in self.input["keys"]:
-                self.input["keys"].remove(repr(event.char))
-            self.send_msg(self.conn, str(self.input).encode())
-        except Exception as e:
-            logger.error(f"Lỗi key_released: {e}")
-
-    def left_click_pressed(self, event):
-        self.input["mouse_pos"] = [event.x/self.width, event.y/self.height]
-        self.input["lmb"] = True
-        self.send_msg(self.conn, str(self.input).encode())
-
-    def left_click_released(self, event):
-        self.input["mouse_pos"] = [event.x/self.width, event.y/self.height]
-        self.input["lmb"] = False
-        self.send_msg(self.conn, str(self.input).encode())
-
-    def right_click_pressed(self, event):
-        self.input["mouse_pos"] = [event.x/self.width, event.y/self.height]
-        self.input["rmb"] = True
-        self.send_msg(self.conn, str(self.input).encode())
-
-    def right_click_released(self, event):
-        self.input["mouse_pos"] = [event.x/self.width, event.y/self.height]
-        self.input["rmb"] = False
-        self.send_msg(self.conn, str(self.input).encode())
 
     # ---------------- Network roles ----------------
 

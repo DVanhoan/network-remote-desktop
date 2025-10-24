@@ -73,7 +73,8 @@ class Chat:
                         break
                     logger.debug(f"Đã nhận message: {msg_data}")
                     if self.display_message:
-                        self.display_message(msg_data['msg'])
+                        # Pass full message dict to display handler for richer signaling
+                        self.display_message(msg_data)
                 except Exception as e:
                     logger.error(f"Lỗi vòng lặp receive_chat (client): {e}")
                     break
@@ -117,8 +118,14 @@ class Chat:
                                     logger.error(f"Mất kết nối chat")
                                     break
                                 logger.debug(f"Đã nhận message: {msg_data}")
+                                # Attach actual sender IP from the socket accept
+                                try:
+                                    msg_data['from_ip'] = addr[0]
+                                except Exception:
+                                    pass
                                 if self.display_message:
-                                    self.display_message(msg_data['msg'])
+                                    # Pass full message dict to display handler for richer signaling
+                                    self.display_message(msg_data)
                             except Exception as e:
                                 logger.error(f"Lỗi vòng lặp receive_chat (host): {e}")
                                 break

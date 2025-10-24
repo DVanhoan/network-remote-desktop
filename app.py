@@ -9,6 +9,7 @@ import random
 import string
 import psutil
 import socket
+import json
 
 from chat import Chat
 from video_manager import VideoManager
@@ -30,10 +31,13 @@ input_manager = InputManager()
 stop_thread = Event()
 chat_manager = Chat()
 
-# Video call
-video_manager = VideoManager()
-video_thread = None
-video_stop_event = Event()
+# Video call: separate sender/receiver so both sides can stream
+video_sender = VideoManager()
+video_receiver = VideoManager()
+video_send_thread = None
+video_recv_thread = None
+video_send_stop = Event()
+video_recv_stop = Event()
 
 vnc.disconnect_chat = chat_manager.disconnect_chat
 
@@ -41,7 +45,67 @@ eel.init('web')
 
 @eel.expose
 def display_recveive_message(msg):
-    eel.show_message(msg)
+    """
+    msg may be a dict coming from Chat.receive_chat (we modified it to pass full message)
+    Format: {"ip": "x.x.x.x", "msg": <string or JSON-string>}
+    We look for signaling messages like {"type":"video_port","port":9001}
+    """
+    try:
+        # msg might already be a dict
+        data = msg
+        if isinstance(msg, str):
+            try:
+                data = json.loads(msg)
+            except Exception:
+                data = msg
+
+        # If it's the wrapper from chat: contains 'ip' and 'msg'
+        if isinstance(data, dict) and 'msg' in data:
+            sender_ip = data.get('from_ip') or data.get('ip')
+            inner = data.get('msg')
+            # try to parse inner
+            try:
+                inner_parsed = json.loads(inner) if isinstance(inner, str) else inner
+            except Exception:
+                inner_parsed = inner
+
+            if isinstance(inner_parsed, dict) and inner_parsed.get('type') == 'video_port':
+                # Host should connect to client's video server
+                port = inner_parsed.get('port')
+                if not port:
+                    return
+                # start a receiver thread to connect to sender_ip:port
+                global video_recv_thread, video_receiver, video_recv_stop
+                try:
+                    if video_recv_thread and video_recv_thread.is_alive():
+                        # already receiving; skip or restart
+                        return
+                    video_receiver.key = vnc.password if status == 'host' else vnc.requestPassword
+                    video_receiver.nonce = vnc.nonce if status == 'host' else vnc.requestNonce
+                    video_receiver.ip = sender_ip
+                    video_receiver.port = port
+                    video_recv_stop.clear()
+                    def on_frame(b64):
+                        eel.updateVideoFrame(b64)
+                    video_recv_thread = Thread(target=video_receiver.receive_video, args=(video_recv_stop, on_frame))
+                    video_recv_thread.daemon = True
+                    video_recv_thread.start()
+                except Exception as e:
+                    logging.error(f"Lỗi khi khởi động receiver cho client video: {e}")
+                return
+
+            # otherwise treat as normal chat text
+            try:
+                text = inner_parsed if isinstance(inner_parsed, str) else str(inner_parsed)
+                eel.show_message(text)
+            except Exception:
+                eel.show_message(str(inner))
+            return
+
+        # Fallback: display raw message
+        eel.show_message(str(msg))
+    except Exception as e:
+        logging.error(f"Lỗi xử lý message chat: {e}")
 
 @eel.expose
 def close_chat_window():
@@ -94,10 +158,9 @@ def host():
     global stop_thread
     global chat_manager
     global chat_thread
-
-    global video_manager
-    global video_thread
-    global video_stop_event
+    # video globals: separate sender & receiver
+    global video_sender, video_send_thread, video_send_stop
+    global video_receiver, video_recv_thread, video_recv_stop
 
     if status == 'None':
         logging.info("Bắt đầu host...")
@@ -121,15 +184,15 @@ def host():
 
         stop_thread.clear()
 
-        # Start video call thread (host)
-        video_manager.key = vnc.password
-        video_manager.nonce = vnc.nonce
-        video_manager.ip = '0.0.0.0'
-        video_manager.port = 9000
-        video_stop_event.clear()
-        video_thread = Thread(target=video_manager.send_video, args=(video_stop_event,))
-        video_thread.daemon = True
-        video_thread.start()
+        # Start video sender (host publishes its webcam on port 9000)
+        video_sender.key = vnc.password
+        video_sender.nonce = vnc.nonce
+        video_sender.ip = '0.0.0.0'
+        video_sender.port = 9000
+        video_send_stop.clear()
+        video_send_thread = Thread(target=video_sender.send_video, args=(video_send_stop,))
+        video_send_thread.daemon = True
+        video_send_thread.start()
         logging.debug("Host threads đã khởi chạy")
     elif status == 'host':
         status = 'None'
@@ -150,11 +213,14 @@ def host():
         chat_manager.disconnect_chat()
         logging.debug("Host threads đã dừng")
 
-        # Stop video call thread (host)
-        if video_thread and video_thread.is_alive():
-            video_stop_event.set()
-            video_thread.join(timeout=0.3)
-        video_thread = None
+        # Stop video sender (host)
+        try:
+            video_send_stop.set()
+            if video_send_thread and video_send_thread.is_alive():
+                video_send_thread.join(timeout=0.3)
+        except Exception:
+            pass
+        video_send_thread = None
 
 @eel.expose
 def stop_connect():
@@ -187,9 +253,9 @@ def connect(ip, requestPassword):
     global connection
     global chat_manager
 
-    global video_manager
-    global video_thread
-    global video_stop_event
+    global video_receiver
+    global video_recv_thread
+    global video_recv_stop
     logging.info(f"Đang kết nối tới {ip}...")
     status = 'client'
     vnc.ip = ip
@@ -219,16 +285,16 @@ def connect(ip, requestPassword):
         logging.info(f"Đã kết nối thành công tới {ip}")
 
         # Start video receive thread (client)
-        video_manager.key = vnc.requestPassword
-        video_manager.nonce = vnc.requestNonce
-        video_manager.ip = ip
-        video_manager.port = 9000
-        video_stop_event.clear()
+        video_receiver.key = vnc.requestPassword
+        video_receiver.nonce = vnc.requestNonce
+        video_receiver.ip = ip
+        video_receiver.port = 9000
+        video_recv_stop.clear()
         def on_frame_callback(b64):
             eel.updateVideoFrame(b64)
-        video_thread = Thread(target=video_manager.receive_video, args=(video_stop_event, on_frame_callback))
-        video_thread.daemon = True
-        video_thread.start()
+        video_recv_thread = Thread(target=video_receiver.receive_video, args=(video_recv_stop, on_frame_callback))
+        video_recv_thread.daemon = True
+        video_recv_thread.start()
         return True
     except Exception as e:
         logging.error(f"Lỗi khi kết nối tới {ip}: {e}")
@@ -236,15 +302,71 @@ def connect(ip, requestPassword):
 
 @eel.expose
 def start_video_call():
-    # Có thể mở rộng để bật video call từ web
-    pass
+    global status, vnc
+    global video_sender, video_receiver
+    global video_send_thread, video_recv_thread
+    global video_send_stop, video_recv_stop
+    try:
+        if status == 'host':
+            # ensure host is sending (host() already starts sender), start if not
+            if not (video_send_thread and video_send_thread.is_alive()):
+                video_sender.key = vnc.password
+                video_sender.nonce = vnc.nonce
+                video_sender.ip = '0.0.0.0'
+                video_sender.port = 9000
+                video_send_stop.clear()
+                video_send_thread = Thread(target=video_sender.send_video, args=(video_send_stop,))
+                video_send_thread.daemon = True
+                video_send_thread.start()
+        elif status == 'client' and vnc.ip:
+            # start client sender (listen for host to connect back) and notify host via chat
+            if not (video_send_thread and video_send_thread.is_alive()):
+                video_sender.key = vnc.requestPassword
+                video_sender.nonce = vnc.requestNonce
+                video_sender.ip = '0.0.0.0'
+                # use 9001 for client->host stream
+                video_sender.port = 9001
+                video_send_stop.clear()
+                video_send_thread = Thread(target=video_sender.send_video, args=(video_send_stop,))
+                video_send_thread.daemon = True
+                video_send_thread.start()
+                # signal host to connect to our sender
+                try:
+                    chat_manager.send_chat_msg(json.dumps({"type": "video_port", "port": 9001}))
+                except Exception as e:
+                    logging.error(f"Không thể gửi tín hiệu video_port tới host: {e}")
+            # ensure we're receiving host stream (connect() already starts receiver), otherwise start
+            if not (video_recv_thread and video_recv_thread.is_alive()):
+                video_receiver.key = vnc.requestPassword
+                video_receiver.nonce = vnc.requestNonce
+                video_receiver.ip = vnc.ip
+                video_receiver.port = 9000
+                video_recv_stop.clear()
+                def on_frame_callback(b64):
+                    eel.updateVideoFrame(b64)
+                video_recv_thread = Thread(target=video_receiver.receive_video, args=(video_recv_stop, on_frame_callback))
+                video_recv_thread.daemon = True
+                video_recv_thread.start()
+    except Exception as e:
+        logging.error(f"Lỗi khi bật video call: {e}")
 
 @eel.expose
 def stop_video_call():
-    global video_stop_event
-    video_stop_event.set()
-    # Có thể mở rộng để tắt video call từ web
-    pass
+    global video_send_stop, video_recv_stop
+    global video_send_thread, video_recv_thread
+    try:
+        # stop sending
+        video_send_stop.set()
+        if video_send_thread and video_send_thread.is_alive():
+            video_send_thread.join(timeout=0.3)
+        video_send_thread = None
+        # stop receiving
+        video_recv_stop.set()
+        if video_recv_thread and video_recv_thread.is_alive():
+            video_recv_thread.join(timeout=0.3)
+        video_recv_thread = None
+    except Exception as e:
+        logging.error(f"Lỗi khi tắt video call: {e}")
 
 @eel.expose
 def transmit_input(data, event_type):

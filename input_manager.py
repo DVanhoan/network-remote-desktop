@@ -1,5 +1,4 @@
 import socket
-import time
 import pyautogui
 import struct
 import logging
@@ -33,7 +32,7 @@ class InputManager:
             encrypt = chacha20_util.encrypt(self.requestKey, self.requestNonce, msg)
             data = struct.pack('>I', len(encrypt)) + encrypt
             sock.sendall(data)
-            logger.debug(f"Đã gửi message {len(msg)} bytes")
+            # logger.debug(f"Đã gửi message {len(msg)} bytes")
         except Exception as e:
             logger.error(f"Lỗi khi gửi message: {e}")
 
@@ -59,55 +58,6 @@ class InputManager:
             data += packet
         return data
 
-    # ---------------- Event handling ----------------
-
-    def set_resolution(self, width=1280, height=720):
-        self.width = width
-        self.height = height
-        logger.info(f"Set resolution: {self.width}x{self.height}")
-
-    def motion(self, event):
-        self.input["mouse_pos"] = [event.x/self.width, event.y/self.height]
-        self.send_msg(self.conn, str(self.input).encode())
-
-    def key_pressed(self, event):
-        try:
-            logger.debug(f"Key Press: {repr(event.char)}")
-            self.input["keys"].append(repr(event.char))
-            self.input["keys"] = list(set(self.input["keys"]))
-            self.send_msg(self.conn, str(self.input).encode())
-        except Exception as e:
-            logger.error(f"Lỗi key_pressed: {e}")
-    
-    def key_released(self, event):
-        try:
-            logger.debug(f"Key Released: {repr(event.char)}")
-            if repr(event.char) in self.input["keys"]:
-                self.input["keys"].remove(repr(event.char))
-            self.send_msg(self.conn, str(self.input).encode())
-        except Exception as e:
-            logger.error(f"Lỗi key_released: {e}")
-
-    def left_click_pressed(self, event):
-        self.input["mouse_pos"] = [event.x/self.width, event.y/self.height]
-        self.input["lmb"] = True
-        self.send_msg(self.conn, str(self.input).encode())
-
-    def left_click_released(self, event):
-        self.input["mouse_pos"] = [event.x/self.width, event.y/self.height]
-        self.input["lmb"] = False
-        self.send_msg(self.conn, str(self.input).encode())
-
-    def right_click_pressed(self, event):
-        self.input["mouse_pos"] = [event.x/self.width, event.y/self.height]
-        self.input["rmb"] = True
-        self.send_msg(self.conn, str(self.input).encode())
-
-    def right_click_released(self, event):
-        self.input["mouse_pos"] = [event.x/self.width, event.y/self.height]
-        self.input["rmb"] = False
-        self.send_msg(self.conn, str(self.input).encode())
-
     # ---------------- Network roles ----------------
 
     def transmit(self):
@@ -124,7 +74,7 @@ class InputManager:
                 sender.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 sender.bind((self.ip, self.port))
                 sender.listen()
-                logger.info(f"Đang chờ kết nối input tại {self.ip}:{self.port}...")
+                logger.info(f"Đang chờ kết nối input từ {self.ip}:{self.port}...")
                 conn, addr = sender.accept()
             except Exception as e:
                 logger.error(f"Lỗi khi bind/listen: {e}")
@@ -145,7 +95,7 @@ class InputManager:
                             logger.warning("Mất kết nối input")
                             break
                         received_input = eval(raw_data.decode())
-                        logger.debug(f"Nhận input: {received_input}")
+                        # logger.debug(f"Nhận input: {received_input}")
 
                         # Mouse
                         mouse_input = received_input["mouse_pos"]
@@ -214,7 +164,7 @@ class InputManager:
                 "wheel": wheel
             }
             self.send_msg(self.conn, str(key_input).encode())
-            logger.debug(f"Đã gửi input: {key_input}")
+            # logger.debug(f"Đã gửi input: {key_input}")
         except Exception as e:
             logger.error(f"Lỗi transmit_input: {e}")
 
@@ -225,7 +175,7 @@ class InputManager:
                 listener.bind((self.ip, self.port))
                 listener.listen()
                 listener.settimeout(0.5)
-                logger.info(f"Đang chờ input client tại {self.ip}:{self.port}...")
+                logger.info(f"Đang chờ input client từ {self.ip}:{self.port}...")
             except Exception as e:
                 logger.error(f"Lỗi khi bind/listen receive_input: {e}")
                 return
@@ -264,7 +214,7 @@ class InputManager:
                                 break
 
                             received_input = eval(raw_data.decode())
-                            logger.debug(f"Nhận input: {received_input}")
+                            # logger.debug(f"Nhận input: {received_input}")
 
                             mouse_input = received_input['mouse_pos']
                             wheel_input = received_input['wheel']

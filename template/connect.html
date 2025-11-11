@@ -137,6 +137,7 @@
                     <div style="flex-grow: 1; width: 100%;">
                         IP: <input id="ip" value="127.0.0.1" class="form-control ip-input" required readonly>
                         <button class="btn btn-danger" onclick="stop_connect()">Stop</button>
+                        <button class="btn btn-primary" onclick="toggle_webcam()">📷 Cam</button>
                     </div>
                 </div>
             </div>
@@ -144,7 +145,32 @@
 
         <main class="screen-container">
             <img src="" id="screen" tabindex="0" ondragstart="return false" onselectstart="return false">
+
             <div class="chat-container">
+
+                <!-- TAB WEBCAM -->
+                <ul class="nav nav-tabs" id="camTab" role="tablist">
+                    <li class="nav-item">
+                        <a class="nav-link active" id="host-tab" data-toggle="tab" href="#hostCam" role="tab">Host Cam</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="my-tab" data-toggle="tab" href="#myCam" role="tab">My Cam</a>
+                    </li>
+                </ul>
+
+                <!-- NỘI DUNG TAB -->
+                <div class="tab-content" style="background:#000; height:230px; display:flex; justify-content:center; align-items:center;">
+                    <div class="tab-pane fade show active w-100 h-100" id="hostCam" role="tabpanel">
+                        <img id="hostCamImage" style="width:100%;height:100%;object-fit:contain;background:black;">
+                    </div>
+
+                    <div class="tab-pane fade w-100 h-100" id="myCam" role="tabpanel">
+                        <img id="myCamImage" style="width:100%;height:100%;object-fit:contain;background:black;">
+                    </div>
+                </div>
+
+
+                <!-- CHAT CŨ GIỮ NGUYÊN -->
                 <div class="messages-container"></div>
                 <div class="chat-input-container">
                     <button id="voice-send" class="btn btn-info">🎤</button>
@@ -152,6 +178,7 @@
                     <button id="file-send" class="btn btn-info">📄</button>
                     <button id="chat-send" class="btn btn-info" onclick="sendChatMessage()">➤</button>
                 </div>
+
             </div>
         </main>
     </div>
@@ -166,6 +193,22 @@
             window.close()
         }
         eel.expose(closeWindow)
+
+        async function toggle_webcam() {
+            await eel.toggle_webcam_func()
+        }
+
+        // Cập nhật webcam của HOST
+        function updateHostWebcam(frame) {
+            document.getElementById("hostCamImage").src = "data:image/jpeg;base64," + frame;
+        }
+        eel.expose(updateHostWebcam);
+
+        // Cập nhật webcam của CLIENT (MY CAM)
+        function updateClientWebcam(frame) {
+            document.getElementById("myCamImage").src = "data:image/jpeg;base64," + frame;
+        }
+        eel.expose(updateClientWebcam);
 
         function show_message(msg) {
             const message = $("<div class='host-message'>").text(msg);
@@ -270,6 +313,8 @@
 
             eel.expose(updateScreen);
         });
+
+
     </script>
 
 </body>

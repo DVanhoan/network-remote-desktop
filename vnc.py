@@ -50,7 +50,7 @@ class VNC:
             buffer = BytesIO()
             image.save(buffer, format='jpeg')
             data_string = base64.b64encode(buffer.getvalue())
-            logger.debug(f"Đã serialize ảnh ({len(data_string)} bytes)")
+            # logger.debug(f"Đã serialize ảnh ({len(data_string)} bytes)")
             return data_string
         except Exception as e:
             logger.error(f"Lỗi serialize ảnh: {e}")
@@ -70,7 +70,7 @@ class VNC:
             encrypt = chacha20_util.encrypt(self.password, self.nonce, msg)
             data = struct.pack('>I', len(encrypt)) + encrypt
             sock.sendall(data)
-            logger.debug(f"Đã gửi message ({len(msg)} bytes)")
+            # logger.debug(f"Đã gửi message ({len(msg)} bytes)")
         except (BrokenPipeError, ConnectionResetError) as e:
             logger.warning(f"Client ngắt kết nối: {e}")
         except OSError as e:
@@ -181,7 +181,7 @@ class VNC:
                         if frame is None:
                             continue
                         self.send_msg(conn, frame)
-                        logger.debug("Đã gửi frame VNC")
+                        # logger.debug("Đã gửi frame VNC")
                     except Exception as e:
                         logger.error(f"Lỗi vòng lặp transmit: {e}")
                         if self.disconnect_chat:
@@ -226,7 +226,7 @@ class VNC:
         try:
             data_string = self.recv_msg(self.conn)
             if data_string:
-                logger.debug(f"Đã nhận frame ({len(data_string)} bytes)")
+                # logger.debug(f"Đã nhận frame ({len(data_string)} bytes)")
                 return data_string.decode()
             else:
                 logger.warning("Mất kết nối VNC hoặc frame rỗng")

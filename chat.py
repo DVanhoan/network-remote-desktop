@@ -8,7 +8,7 @@ import json
 logger = logging.getLogger(__name__)
 
 class Chat:
-    def __init__(self, ip='0.0.0.0', port=7001, myIp=None, display_message=None):
+    def __init__(self, ip='0.0.0.0', port=7001, myIp=None, display_message=None, close_chat_window=None):
         self.ip = ip
         self.myIp = myIp
         self.port = port
@@ -20,6 +20,7 @@ class Chat:
         self.status = ''
         self.myIp = ''
         self.display_message = display_message
+        self.close_chat_window = close_chat_window
 
     def recv_all(self, conn, length):
         data = b""
@@ -97,7 +98,7 @@ class Chat:
                             except socket.timeout:
                                 continue
                             except Exception as e:
-                                logger.error(f"Lỗi accept: {e}")
+                                logger.error(f"Lỗi accept chat: {e}")
                                 return
                         if self.conn == None:
                             logger.debug(f"Dừng kết nối receive_chat")
@@ -125,7 +126,7 @@ class Chat:
 
     def send_chat_msg(self, msg):
         try:
-            data = {"ip": self.ip, "msg": msg}
+            data = {"ip": self.myIp, "msg": msg}
             self.send_msg(self.conn, json.dumps(data).encode())
             logger.info(f"Đã gửi chat message: {data}")
             return True
@@ -153,5 +154,7 @@ class Chat:
         try:
             self.conn.close()
             self.conn = None
+            if self.close_chat_window:
+                self.close_chat_window()
         except Exception as e:
             logger.warning(f"Lỗi khi đóng kết nối chat")

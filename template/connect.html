@@ -173,7 +173,7 @@
                 <!-- CHAT CŨ GIỮ NGUYÊN -->
                 <div class="messages-container"></div>
                 <div class="chat-input-container">
-                    <button id="voice-send" class="btn btn-info">🎤</button>
+                    <button id="voice-send" class="btn btn-info" onclick="toggle_audio()">🎤</button>
                     <input type="text" id="chat-input" class="form-control" placeholder="Type a message..." style="width: 200px;">
                     <button id="file-send" class="btn btn-info">📄</button>
                     <button id="chat-send" class="btn btn-info" onclick="sendChatMessage()">➤</button>
@@ -193,6 +193,10 @@
             window.close()
         }
         eel.expose(closeWindow)
+
+        async function toggle_audio() {
+            await eel.toggle_audio_func()
+        }
 
         async function toggle_webcam() {
             await eel.toggle_webcam_func()

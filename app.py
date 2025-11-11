@@ -30,6 +30,7 @@ stop_thread = Event()
 toggle_audio = Event()
 toggle_webcam = Event()
 toggle_webcam.clear()
+toggle_audio.clear()
 chat_manager = Chat()
 audio_manager = Audio()
 webcam_manager = Webcam()
@@ -44,14 +45,14 @@ def display_recveive_message(msg):
 
 @eel.expose
 def toggle_audio_func():
+    print("Toggle audio called")
     if toggle_audio.is_set():
-        toggle_audio.audio.clear()
+        toggle_audio.clear()
     else:
         toggle_audio.set()
 
 @eel.expose
 def toggle_webcam_func():
-    print("Toggle webcam called")
     if toggle_webcam.is_set():
         toggle_webcam.clear()
     else:
@@ -288,6 +289,14 @@ def connect(ip, requestPassword):
         webcam_receiving_thread = Thread(target=webcam_manager.receive_webcam, args=[stop_thread, True])
         webcam_receiving_thread.daemon = True
         webcam_receiving_thread.start()
+
+        audio_sending_thread = Thread(target=audio_manager.start_sending_audio, args=[stop_thread, toggle_audio])
+        audio_sending_thread.daemon = True
+        audio_sending_thread.start()
+
+        audio_receiving_thread = Thread(target=audio_manager.receive_audio, args=[stop_thread, True])
+        audio_receiving_thread.daemon = True
+        audio_receiving_thread.start()
 
         connection = 'active'
         eel.show(f"connect.html?host={ip}")

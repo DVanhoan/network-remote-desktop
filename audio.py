@@ -55,13 +55,6 @@ class Audio:
         except Exception as e:
             logger.error(f"Lỗi khi nhận dữ liệu âm thanh: {e}")
             return None
-        
-    def play_audio(self, audio_data, fs=44100):
-        try:
-            sd.play(audio_data, fs)
-            sd.wait()
-        except Exception as e:
-            logger.error(f"Lỗi khi phát âm thanh: {e}")
 
     def send_audio(self, sock, audio_data):
         try:
@@ -75,39 +68,46 @@ class Audio:
             logger.debug(f"Đã gửi dữ liệu âm thanh {len(serialized_data)} bytes")
         except Exception as e:
             logger.error(f"Lỗi khi gửi dữ liệu âm thanh: {e}")
-
-    def record_audio(self, duration=1/10, fs=44100):
-        try:
-            audio_data = sd.rec(int(duration * fs), samplerate=fs, channels=1, dtype='float32')
-            sd.wait()
-            return audio_data.flatten()
-        except Exception as e:
-            logger.error(f"Lỗi khi ghi âm thanh: {e}")
-            return np.array([])
         
-    def start_sending_audio(self, stop_event, toggle_audio, interval=2/10, fs=44100):
-        while not stop_event.is_set():
-            if not toggle_audio.is_set():
-                time.sleep(interval)
-                continue
-            audio_data = self.record_audio(duration=interval, fs=fs)
-            if audio_data.size > 0:
-                self.send_audio(self.conn, audio_data)
+    def start_sending_audio(self, stop_event, toggle_audio, fs=44100, block_size=1024):
+        def callback(indata, frames, time, status):
+            if stop_event.is_set() or not toggle_audio.is_set():
+                return
+            try:
+                audio_bytes = indata.astype(np.float32).tobytes()
+                if self.status == 'client':
+                    enc = chacha20_util.encrypt(self.requestKey, self.requestNonce, audio_bytes)
+                else:
+                    enc = chacha20_util.encrypt(self.key, self.nonce, audio_bytes)
+                packet = struct.pack(">I", len(enc)) + enc
+                self.conn.sendall(packet)
+            except:
+                pass
 
-    def receive_audio(self, stop_event, client_mode = False):
+        with sd.InputStream(samplerate=fs, channels=1, callback=callback, blocksize=block_size):
+            while not stop_event.is_set():
+                time.sleep(0.1)
+
+    def receive_audio(self, stop_event, client_mode=False):
+        fs = 44100  # sample rate
+
+        # ---------------- CLIENT MODE ----------------
         if client_mode:
             logger.info(f"Đã kết nối đến audio host: {self.ip}")
 
-            while not stop_event.is_set() and self.conn is not None:
-                try:
-                    audio_data = self.recv_audio(self.conn)
-                    if audio_data is not None:
-                        self.play_audio(audio_data)
-                except Exception as e:
-                    logger.error(f"Lỗi khi nhận dữ liệu âm thanh: {e}")
-                    break
+            with sd.OutputStream(samplerate=fs, channels=1, dtype="float32") as stream:
+                while not stop_event.is_set() and self.conn is not None:
+                    try:
+                        audio_data = self.recv_audio(self.conn)
+                        if audio_data is not None:
+                            stream.write(audio_data)
+                    except Exception as e:
+                        logger.error(f"Lỗi khi nhận dữ liệu âm thanh: {e}")
+                        break
+
         else:
             logger.info(f"Đang chờ kết nối audio từ client...")
+
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listner:
                 try:
                     listner.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -117,6 +117,7 @@ class Audio:
                 except Exception as e:
                     logger.error(f"Lỗi khi bind/listen receive_audio: {e}")
                     return
+
                 while not stop_event.is_set():
                     self.conn = None
                     try:
@@ -129,20 +130,21 @@ class Audio:
                             except Exception as e:
                                 logger.error(f"Lỗi accept audio: {e}")
                                 return
-                        if self.conn == None:
-                            logger.debug(f"Dừng kết nối receive_audio")
+
+                        if self.conn is None:
                             return
+
                     except Exception as e:
                         logger.error(f"Lỗi vòng lặp receive_audio (host): {e}")
                         break
 
-                    with self.conn:
+                    with self.conn, sd.OutputStream(samplerate=fs, channels=1, dtype="float32") as stream:
                         logger.info(f"Audio client đã kết nối: {addr}")
                         while not stop_event.is_set():
                             try:
                                 audio_data = self.recv_audio(self.conn)
                                 if audio_data is not None:
-                                    self.play_audio(audio_data)
+                                    stream.write(audio_data)
                             except Exception as e:
                                 logger.error(f"Lỗi khi nhận dữ liệu âm thanh: {e}")
                                 break

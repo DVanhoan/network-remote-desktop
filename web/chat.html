@@ -115,7 +115,7 @@
             border-radius: 4px;
             margin-bottom: 8px;
             max-width: 75%;
-            align-self: flex-start;
+            align-self: flex-end;
         }
         .client-message {
             background: #d1e7dd;
@@ -123,7 +123,7 @@
             border-radius: 4px;
             margin-bottom: 8px;
             max-width: 75%;
-            align-self: flex-end;
+            align-self: flex-start;
         }
     </style>
 
@@ -136,22 +136,18 @@
                 <div style="display: flex; align-items: flex-end; flex-direction: column; flex-grow: 1; width: 100%;">
                     <div style="flex-grow: 1; width: 100%;">
                         IP: <input id="ip" value="127.0.0.1" class="form-control ip-input" required readonly>
-                        <button class="btn btn-danger" onclick="stop_connect()">Stop</button>
                     </div>
                 </div>
             </div>
         </header>
 
-        <main class="screen-container">
-            <img src="" id="screen" tabindex="0" ondragstart="return false" onselectstart="return false">
-            <div class="chat-container">
-                <div class="messages-container"></div>
-                <div class="chat-input-container">
-                    <button id="voice-send" class="btn btn-info">🎤</button>
-                    <input type="text" id="chat-input" class="form-control" placeholder="Type a message..." style="width: 200px;">
-                    <button id="file-send" class="btn btn-info">📄</button>
-                    <button id="chat-send" class="btn btn-info" onclick="sendChatMessage()">➤</button>
-                </div>
+        <main class="chat-container">
+            <div class="messages-container"></div>
+            <div class="chat-input-container">
+                <button id="voice-send" class="btn btn-info">🎤</button>
+                <input type="text" id="chat-input" class="form-control" placeholder="Type a message..." style="width: 200px;">
+                <button id="file-send" class="btn btn-info">📄</button>
+                <button id="chat-send" class="btn btn-info" onclick="sendChatMessage()">➤</button>
             </div>
         </main>
     </div>
@@ -162,38 +158,23 @@
             window.close()
         }
 
-        function closeWindow() {
+        function closeChatWindow() {
             window.close()
         }
-        eel.expose(closeWindow)
+        eel.expose(closeChatWindow)
 
         function show_message(msg) {
-            const message = $("<div class='host-message'>").text(msg);
+            const message = $("<div class='client-message'>").text(msg);
             $(".messages-container").append(message);
         }
         eel.expose(show_message);
-
-        async function connect() {
-            ip = $('#ip').val();
-            password = $('#password').val()
-            if (ip.length == 0){
-                $('#ip').focus()
-            } else if (password.length == 0){
-                $('#password').focus()
-            } else {
-                result = await eel.connect(ip, password)
-                if (result === false) {
-                    alert("Kết nối không hợp lệ hoặc sai mật khẩu")
-                }
-            }
-        }
 
         async function sendChatMessage() {
             msg = $("#chat-input").val();
             if (msg.length > 0) {
                 sent = await eel.send_chat_message(msg)();
                 if (sent) {
-                    message = $("<div class='client-message'>").text(msg);
+                    message = $("<div class='host-message'>").text(msg);
                     $(".messages-container").append(message);
                     $("#chat-input").val("")
                 } else {
@@ -206,7 +187,7 @@
 
         $(document).ready(async function() {
             const urlParams = new URLSearchParams(window.location.search);
-            const hostIpFromUrl = urlParams.get('host');
+            const hostIpFromUrl = urlParams.get('client');
             if (hostIpFromUrl) {
                 $("#ip").val(hostIpFromUrl);
             } else {
@@ -215,60 +196,12 @@
             }
         })
 
-        function updateScreen(imageString)
-        {
-            $("#screen").attr("src", `data:image/png;base64,${imageString}`);
-        }
-
         $(document).ready(function() {
             try {
-                window.resizeTo(1450, 800);
+                window.resizeTo(360, 500);
             } catch (e) {
                 console.warn("Không thể thay đổi kích thước cửa sổ:", e);
             }
-
-            $("#screen")[0].oncontextmenu = function() {return false;} 
-
-            $("#screen").on('mousedown', function(event){ 
-                bounds = this.getBoundingClientRect();
-                var x = (event.clientX - bounds.left) / this.clientWidth;
-                var y = (event.clientY - bounds.top) / this.clientHeight;
-                eel.transmit_input({pos: [x,y], button: event.button}, "mousedown");
-            }); 
-
-            $("#screen").on('mouseup', function(event){ 
-                bounds = this.getBoundingClientRect();
-                var x = (event.clientX - bounds.left) / this.clientWidth;
-                var y = (event.clientY - bounds.top) / this.clientHeight;
-                eel.transmit_input({pos: [x,y], button: event.button}, "mouseup");
-            }); 
-            
-            $("#screen").on("keydown", function(event){
-                eel.transmit_input(event.keyCode, "keydown");
-                console.log(event);
-            })
-            $("#screen").on("keyup", function(event){
-                eel.transmit_input(event.keyCode, "keyup");
-                console.log(event);
-            })
-
-            $("#screen").on("mousemove", function(event){
-                bounds = this.getBoundingClientRect();
-                var x = (event.clientX - bounds.left) / this.clientWidth;
-                var y = (event.clientY - bounds.top) / this.clientHeight;
-                document.body.style.cursor = "url('data:image/svg+xml;utf8,\
-                    <svg xmlns=\"http://www.w3.org/2000/svg\" width=\"32\" height=\"32\" viewBox=\"0 0 32 32\">\
-                    <polygon points=\"4,4 12,16 8,16 12,28 16,28 12,16 20,16\" fill=\"blue\"/>\
-                    </svg>') 4 4, auto";
-                eel.transmit_input([x, y], "mousemove"); 
-            })
-
-            $(".screen-container").on("wheel", function(event) {
-                event.preventDefault();
-                eel.transmit_input({deltaY: event.originalEvent.deltaY}, "wheel");
-            })
-
-            eel.expose(updateScreen);
         });
     </script>
 

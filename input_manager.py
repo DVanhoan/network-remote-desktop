@@ -4,6 +4,7 @@ import pyautogui
 import struct
 import logging
 from pynput import mouse, keyboard
+import chacha20_util
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +18,10 @@ class InputManager:
             "keys": [],
         }
         self.ip = ip
+        self.key = None
+        self.nonce = None
+        self.requestKey = None
+        self.requestNonce = None
         self.port = port
         self.conn = None
         self.width, self.height = (0, 0)
@@ -25,8 +30,9 @@ class InputManager:
 
     def send_msg(self, sock, msg):
         try:
-            msg = struct.pack('>I', len(msg)) + msg
-            sock.sendall(msg)
+            encrypt = chacha20_util.encrypt(self.requestKey, self.requestNonce, msg)
+            data = struct.pack('>I', len(encrypt)) + encrypt
+            sock.sendall(data)
             logger.debug(f"Đã gửi message {len(msg)} bytes")
         except Exception as e:
             logger.error(f"Lỗi khi gửi message: {e}")
@@ -37,7 +43,9 @@ class InputManager:
             if not raw_msglen:
                 return None
             msglen = struct.unpack('>I', raw_msglen)[0]
-            return self.recvall(sock, msglen)
+            encrypted_data = self.recvall(sock, msglen)
+            decrypt = chacha20_util.decrypt(self.key, self.nonce, encrypted_data)
+            return decrypt
         except Exception as e:
             logger.error(f"Lỗi khi nhận message: {e}")
             return None
@@ -173,11 +181,27 @@ class InputManager:
 
     def connect_input(self):
         try:
+            if self.conn:
+                try:
+                    self.conn.close()
+                except:
+                    pass
+                self.conn = None
             self.conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.conn.connect((self.ip, self.port))
             logger.info(f"Đã kết nối tới input server {self.ip}:{self.port}")
         except Exception as e:
+            self.conn.close()
+            self.conn = None
             logger.error(f"Lỗi connect_input: {e}")
+
+    def disconnect_input(self):
+        try:
+            self.conn.close()
+            self.conn = None
+            logger.info(f"Đã ngắt kết nối tới input host {self.ip}:{self.port}")
+        except Exception as e:
+            logger.error(f"Lỗi disconnect_input: {e}")
 
     def transmit_input(self, mouse_pos=None, mouse_down=None, mouse_up=None, keydown=None, keyup=None, wheel=None):
         try:
@@ -194,65 +218,86 @@ class InputManager:
         except Exception as e:
             logger.error(f"Lỗi transmit_input: {e}")
 
-    def receive_input(self):
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sender:
+    def receive_input(self, stop_event):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
             try:
-                sender.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                sender.bind((self.ip, self.port))
-                sender.listen()
+                listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                listener.bind((self.ip, self.port))
+                listener.listen()
+                listener.settimeout(0.5)
                 logger.info(f"Đang chờ input client tại {self.ip}:{self.port}...")
-                conn, addr = sender.accept()
             except Exception as e:
                 logger.error(f"Lỗi khi bind/listen receive_input: {e}")
                 return
+            
+            while not stop_event.is_set():
+                conn = None
+                try:
+                    while not stop_event.is_set():
+                        try:
+                            conn, addr = listener.accept()
+                            break
+                        except socket.timeout:
+                            continue
+                        except Exception as e:
+                            logger.error(f"Lỗi accept: {e}")
+                            return
+                    if conn == None:
+                        logger.debug(f"Dừng kết nối receive_input")
+                        return
+                except Exception as e:
+                    logger.error(f"Lỗi khi accept client: {e}")
+                    return
 
-            with conn:
-                logger.info(f"Input client đã kết nối: {addr}")
+                with conn:
+                    logger.info(f"Input client đã kết nối: {addr}")
 
-                width, height = pyautogui.size()
-                mouse_controller = mouse.Controller()
-                keyboard_controller = keyboard.Controller()
+                    width, height = pyautogui.size()
+                    mouse_controller = mouse.Controller()
+                    keyboard_controller = keyboard.Controller()
 
-                while True:
-                    try:
-                        raw_data = self.recv_msg(conn)
-                        if not raw_data:
-                            logger.warning("Mất kết nối input client")
+                    while not stop_event.is_set():
+                        try:
+                            raw_data = self.recv_msg(conn)
+                            if not raw_data:
+                                logger.warning("Mất kết nối input client")
+                                break
+
+                            received_input = eval(raw_data.decode())
+                            logger.debug(f"Nhận input: {received_input}")
+
+                            mouse_input = received_input['mouse_pos']
+                            wheel_input = received_input['wheel']
+                            if mouse_input:
+                                mouse_input[0] *= width
+                                mouse_input[1] *= height
+                                mouse_controller.position = tuple(mouse_input)
+
+                            if received_input['mouse_down'] == 0:
+                                mouse_controller.press(mouse.Button.left)
+                            if received_input['mouse_up'] == 0:
+                                mouse_controller.release(mouse.Button.left)
+
+                            if received_input['mouse_down'] == 1:
+                                mouse_controller.press(mouse.Button.middle)
+                            if received_input['mouse_up'] == 1:
+                                mouse_controller.release(mouse.Button.middle)
+
+                            if received_input['mouse_down'] == 2:
+                                mouse_controller.press(mouse.Button.right)
+                            if received_input['mouse_up'] == 2:
+                                mouse_controller.release(mouse.Button.right)
+
+                            if received_input['wheel']:
+                                mouse_controller.scroll(dx=0, dy=-180/wheel_input)
+
+                            if received_input['keydown']:
+                                keyboard_controller.press(keyboard.KeyCode(received_input['keydown']))
+                            if received_input['keyup']:
+                                keyboard_controller.release(keyboard.KeyCode(received_input['keyup']))
+
+                        except Exception as e:
+                            logger.error(f"Lỗi vòng lặp receive_input: {e}")
                             break
 
-                        received_input = eval(raw_data.decode())
-                        logger.debug(f"Nhận input: {received_input}")
-
-                        mouse_input = received_input['mouse_pos']
-                        wheel_input = received_input['wheel']
-                        if mouse_input:
-                            mouse_input[0] *= width
-                            mouse_input[1] *= height
-                            mouse_controller.position = tuple(mouse_input)
-
-                        if received_input['mouse_down'] == 0:
-                            mouse_controller.press(mouse.Button.left)
-                        if received_input['mouse_up'] == 0:
-                            mouse_controller.release(mouse.Button.left)
-
-                        if received_input['mouse_down'] == 1:
-                            mouse_controller.press(mouse.Button.middle)
-                        if received_input['mouse_up'] == 1:
-                            mouse_controller.release(mouse.Button.middle)
-
-                        if received_input['mouse_down'] == 2:
-                            mouse_controller.press(mouse.Button.right)
-                        if received_input['mouse_up'] == 2:
-                            mouse_controller.release(mouse.Button.right)
-
-                        if received_input['wheel']:
-                            mouse_controller.scroll(dx=0, dy=-180/wheel_input)
-
-                        if received_input['keydown']:
-                            keyboard_controller.press(keyboard.KeyCode(received_input['keydown']))
-                        if received_input['keyup']:
-                            keyboard_controller.release(keyboard.KeyCode(received_input['keyup']))
-
-                    except Exception as e:
-                        logger.error(f"Lỗi vòng lặp receive_input: {e}")
-                        break
+                logger.info("Client input đã ngắt kết nối — chuẩn bị accept client mới...")

@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css"
+        crossorigin="anonymous">
+    <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" crossorigin="anonymous"></script>
+    <script src="/eel.js"></script>
+
+    <style>
+        html, body {
+            margin: 0; padding: 0;
+            height: 100%; width: 100%;
+            overflow: hidden; background: black;
+        }
+        #app { display: flex; flex-direction: column; height: 100vh; width: 100vw; }
+
+        .toolbar { background:#111; color:#fff; padding:6px; display:flex; align-items:center; gap:8px; }
+
+        .tab-bar { display:flex; background:#222; }
+        .tab-btn {
+            flex:1; border: none; padding:8px; color:white; background:#333;
+        }
+        .tab-btn.active { background:#007bff; }
+
+        .tab-content {
+            display:none; flex:1; align-items:center; justify-content:center;
+            background:black;
+        }
+        .tab-content.active { display:flex; }
+
+        .cam-view {
+            width:100%; background:black; object-fit:cover;
+        }
+
+        .chat-container {
+            display:flex; flex-direction:column; height:100%; width:100%;
+        }
+        .messages-container {
+            flex:1; overflow-y:auto; padding:8px;
+            background:#f8f9fa; border-top:1px solid #444;
+        }
+        .chat-input-container {
+            display:flex; gap:4px; padding:8px; background:#f1f1f1; border-top:1px solid #ccc;
+        }
+        .host-message, .client-message {
+            padding:6px 8px; border-radius:4px; margin-bottom:6px; max-width:75%;
+        }
+        .host-message { background:#d1e7ff; margin-left:auto; }
+        .client-message { background:#d1ffd6; margin-right:auto; }
+    </style>
+</head>
+
+<body>
+<div id="app">
+
+    <!-- TOOLBAR có thêm nút Stop, Webcam, Mic -->
+    <header class="toolbar">
+        IP: <input id="ip" value="127.0.0.1" readonly style="width:120px">
+        <button class="btn btn-danger btn-sm" onclick="stop_connect()">Stop</button>
+        <button id="btnToggleWebcam" class="btn btn-sm btn-warning" onclick="eel.toggle_webcam_func()">📷</button>
+        
+    </header>
+
+    <!-- TAB -->
+    <div class="tab-bar">
+        <button class="tab-btn active" data-tab="chatTab">Chat</button>
+        <button class="tab-btn" data-tab="hostCamTab">Host Webcam</button>
+        <button class="tab-btn" data-tab="myCamTab">Client Webcam</button>
+    </div>
+
+    <!-- Host Cam Tab -->
+    <div id="hostCamTab" class="tab-content">
+        <img id="hostCamImage" class="cam-view">
+    </div>
+
+    <!-- My Cam Tab -->
+    <div id="myCamTab" class="tab-content">
+        <img id="clientCamImage" class="cam-view">
+    </div>
+
+    <!-- Chat Tab -->
+    <div id="chatTab" class="tab-content active">
+        <main class="chat-container">
+            <div class="messages-container"></div>
+            <div class="chat-input-container">
+                <button id="btnToggleMic" class="btn btn-sm btn-info" onclick="eel.toggle_audio_func">🎤</button>
+                <input type="text" id="chat-input" class="form-control" placeholder="Type a message..." style="width:200px">
+                <button id="chat-send" class="btn btn-info" onclick="sendChatMessage()">➤</button>
+            </div>
+        </main>
+    </div>
+
+</div>
+
+<script>
+
+// Cập nhật webcam của HOST
+function updateHostWebcam(frame) {
+    document.getElementById("hostCamImage").src = "data:image/jpeg;base64," + frame;
+}
+eel.expose(updateHostWebcam);
+
+// Cập nhật webcam của CLIENT (MY CAM)
+function updateClientWebcam(frame) {
+    document.getElementById("clientCamImage").src = "data:image/jpeg;base64," + frame;
+}
+eel.expose(updateClientWebcam);
+
+/* ===== TAB SWITCH ===== */
+$(".tab-btn").click(function(){
+    $(".tab-btn").removeClass("active");
+    $(".tab-content").removeClass("active");
+    $(this).addClass("active");
+    $("#"+$(this).data("tab")).addClass("active");
+});
+
+/* ===== TOOLBAR BUTTON ACTIONS ===== */
+document.getElementById("btnToggleWebcam").addEventListener("click", () => {
+    eel.toggle_webcam();
+});
+
+document.getElementById("btnToggleMic").addEventListener("click", () => {
+    eel.toggle_audio();
+});
+
+/* ===== CODE CŨ GIỮ NGUYÊN (chat + close) ===== */
+async function stop_connect() {
+    await eel.stop_connect()
+    window.close()
+}
+
+function closeChatWindow() { window.close() }
+eel.expose(closeChatWindow)
+
+function show_message(msg) {
+    const message = $("<div class='client-message'>").text(msg);
+    $(".messages-container").append(message);
+}
+eel.expose(show_message);
+
+async function sendChatMessage() {
+    msg = $("#chat-input").val();
+    if (msg.length > 0) {
+        sent = await eel.send_chat_message(msg)();
+        if (sent) {
+            message = $("<div class='host-message'>").text(msg);
+            $(".messages-container").append(message);
+            $("#chat-input").val("")
+        } else {
+            alert("Gửi tin nhắn thất bại")
+        }
+    } else {
+        $("#chat-input").focus()
+    }
+}
+
+$(document).ready(async function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const hostIpFromUrl = urlParams.get('client');
+    if (hostIpFromUrl) {
+        $("#ip").val(hostIpFromUrl);
+    } else {
+        let fallbackIp = await eel.get_host_ip()();
+        $("#ip").val(fallbackIp || "127.0.0.1");
+    }
+})
+
+$(document).ready(function() {
+    try { window.resizeTo(360, 500); }
+    catch (e) { console.warn("Không thể thay đổi kích thước cửa sổ:", e); }
+});
+</script>
+
+</body>
+</html>

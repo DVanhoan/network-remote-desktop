@@ -55,6 +55,10 @@ def toggle_audio_func():
 def toggle_webcam_func():
     if toggle_webcam.is_set():
         toggle_webcam.clear()
+        if status == 'client':
+            eel.stopClientWebcam()
+        else:
+            eel.stopHostWebcam()
     else:
         toggle_webcam.set()
 
